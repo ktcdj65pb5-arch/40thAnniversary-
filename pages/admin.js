@@ -183,8 +183,6 @@ function Dashboard({ email }) {
           <p className={styles.muted}>{EVENT.title} · {EVENT.date} · signed in as {email}</p>
         </div>
         <div className={styles.headerActions}>
-          <a className={styles.btnGhost} href="/flyer" target="_blank" rel="noreferrer">A5 flyer</a>
-          <a className={styles.btnGhost} href="/invitation" target="_blank" rel="noreferrer">Digital flyer</a>
           <button className={styles.btnGhost} onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
       </header>
