@@ -89,89 +89,75 @@ function Login() {
   );
 }
 
+const DIETARY_LABEL = { none: "No", halal: "Halal", vegetarian: "Vegan / Vegetarian" };
+const rsvpLabel = (r) => (r.attending ? "Yes" : "No");
+const dietLabel = (r) => (r.attending ? DIETARY_LABEL[r.dietary] || "–" : "–");
+
 function Dashboard({ email }) {
   const [regs, setRegs] = useState([]);
-  const [depts, setDepts] = useState([]);
-  const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [newCode, setNewCode] = useState("");
-  const [newName, setNewName] = useState("");
-  const [msg, setMsg] = useState("");
+  const [fCompany, setFCompany] = useState("all");
+  const [fRsvp, setFRsvp] = useState("all");
+  const [fDiet, setFDiet] = useState("all");
 
   const load = useCallback(async () => {
-    const [r, d] = await Promise.all([
-      supabase
-        .from("registrations")
-        .select("id, name, department, created_at")
-        .order("created_at", { ascending: false }),
-      supabase.from("departments").select("*").order("sort_order").order("code"),
-    ]);
-    setRegs(r.data || []);
-    setDepts(d.data || []);
+    const { data } = await supabase
+      .from("registrations")
+      .select("id, name, company, department, attending, dietary, created_at")
+      .order("created_at", { ascending: false });
+    setRegs(data || []);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // Tellingen per afdeling, hoofdletterongevoelig (vrije invoer).
-  const deptKey = (v) => (v || "").trim().toLowerCase();
-  const groups = useMemo(() => {
+  const yes = regs.filter((r) => r.attending);
+  const stats = [
+    { label: "Responses", value: regs.length },
+    { label: "Attending", value: yes.length },
+    { label: "Not attending", value: regs.length - yes.length },
+    { label: "Halal", value: yes.filter((r) => r.dietary === "halal").length },
+    { label: "Vegan / Vegetarian", value: yes.filter((r) => r.dietary === "vegetarian").length },
+    { label: "No dietary req.", value: yes.filter((r) => r.dietary === "none").length },
+  ];
+
+  // Bedrijf is vrije tekst: groepeer hoofdletterongevoelig.
+  const cKey = (r) => (r.company || "–").trim().toLowerCase();
+  const companyGroups = useMemo(() => {
     const m = new Map();
-    regs.forEach((r) => {
-      const k = deptKey(r.department);
-      const g = m.get(k) || { key: k, label: r.department, count: 0 };
-      g.count += 1;
-      m.set(k, g);
-    });
-    return [...m.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    regs.forEach((r) => { if (!m.has(cKey(r))) m.set(cKey(r), (r.company || "–").trim()); });
+    return [...m.entries()].map(([key, label]) => ({ key, label })).sort((a, b) => a.label.localeCompare(b.label));
   }, [regs]);
+  const perCompany = companyGroups.map((c) => ({
+    ...c,
+    attending: yes.filter((r) => cKey(r) === c.key).length,
+  }));
 
   const q = search.trim().toLowerCase();
   const visible = regs.filter((r) =>
-    (filter === "all" || deptKey(r.department) === filter) &&
-    (!q || r.name.toLowerCase().includes(q) || deptKey(r.department).includes(q))
+    (fCompany === "all" || cKey(r) === fCompany) &&
+    (fRsvp === "all" || (fRsvp === "yes") === r.attending) &&
+    (fDiet === "all" || (r.attending && r.dietary === fDiet)) &&
+    (!q || [r.name, r.department, r.company].some((v) => (v || "").toLowerCase().includes(q)))
   );
 
   async function removeReg(r) {
-    if (!confirm(`Remove ${r.name}?`)) return;
+    if (!confirm(`Remove the response of ${r.name}?`)) return;
     await supabase.from("registrations").delete().eq("id", r.id);
-    load();
-  }
-
-  async function addDept(e) {
-    e.preventDefault();
-    setMsg("");
-    const code = newCode.trim();
-    if (!code) return;
-    const sort = Math.max(0, ...depts.map((d) => d.sort_order)) + 1;
-    const { error } = await supabase
-      .from("departments")
-      .insert({ code, name: newName.trim() || null, sort_order: sort });
-    if (error) return setMsg(error.code === "23505" ? `${code} already exists.` : error.message);
-    setNewCode("");
-    setNewName("");
-    load();
-  }
-
-  async function toggleDept(d) {
-    await supabase.from("departments").update({ active: !d.active }).eq("id", d.id);
-    load();
-  }
-
-  async function removeDept(d) {
-    if (!confirm(`Remove suggestion ${d.code}? Existing registrations are kept.`)) return;
-    await supabase.from("departments").delete().eq("id", d.id);
     load();
   }
 
   function exportCsv() {
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const rows = [["Name", "Department", "Signed up"]].concat(
-      visible.map((r) => [r.name, r.department, new Date(r.created_at).toLocaleString("nl-NL")])
+    const rows = [["Name", "Department", "Company", "RSVP", "Dietary", "Responded"]].concat(
+      visible.map((r) => [
+        r.name, r.department, r.company, rsvpLabel(r), dietLabel(r),
+        new Date(r.created_at).toLocaleString("nl-NL"),
+      ])
     );
     const csv = "﻿" + rows.map((row) => row.map(esc).join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = "registrations.csv";
+    a.download = "rsvp-40th-anniversary.csv";
     a.click();
   }
 
@@ -179,77 +165,159 @@ function Dashboard({ email }) {
     <div className={styles.wrap}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.h1}>Registrations</h1>
+          <h1 className={styles.h1}>RSVP overview</h1>
           <p className={styles.muted}>{EVENT.title} · {EVENT.date} · signed in as {email}</p>
         </div>
         <div className={styles.headerActions}>
+          <button className={styles.btnGhost} onClick={load}>Refresh</button>
           <button className={styles.btnGhost} onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
       </header>
 
       <div className={styles.stats}>
-        <button className={`${styles.stat} ${filter === "all" ? styles.statActive : ""}`} onClick={() => setFilter("all")}>
-          <span className={styles.statNum}>{regs.length}</span>
-          <span className={styles.statLabel}>Total</span>
-        </button>
-        {groups.map((g) => (
-          <button key={g.key} className={`${styles.stat} ${filter === g.key ? styles.statActive : ""}`} onClick={() => setFilter(g.key)}>
-            <span className={styles.statNum}>{g.count}</span>
-            <span className={styles.statLabel}>{g.label}</span>
-          </button>
+        {stats.map((s) => (
+          <div key={s.label} className={styles.stat}>
+            <span className={styles.statNum}>{s.value}</span>
+            <span className={styles.statLabel}>{s.label}</span>
+          </div>
         ))}
       </div>
 
+      {perCompany.length > 0 && (
+        <p className={styles.perCompany}>
+          Attending per company:{" "}
+          {perCompany.map((c) => (
+            <span key={c.key} className={styles.pill}>{c.label} <b>{c.attending}</b></span>
+          ))}
+        </p>
+      )}
+
       <section className={styles.panel}>
         <div className={styles.toolbar}>
-          <input className={styles.input} placeholder="Search name or department…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className={styles.input} placeholder="Search name, department or company…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <select className={styles.select} value={fCompany} onChange={(e) => setFCompany(e.target.value)}>
+            <option value="all">All companies</option>
+            {companyGroups.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          <select className={styles.select} value={fRsvp} onChange={(e) => setFRsvp(e.target.value)}>
+            <option value="all">RSVP: all</option>
+            <option value="yes">RSVP: yes</option>
+            <option value="no">RSVP: no</option>
+          </select>
+          <select className={styles.select} value={fDiet} onChange={(e) => setFDiet(e.target.value)}>
+            <option value="all">Dietary: all</option>
+            <option value="none">Dietary: no</option>
+            <option value="halal">Dietary: halal</option>
+            <option value="vegetarian">Dietary: vegan / vegetarian</option>
+          </select>
           <button className={styles.btn} onClick={exportCsv} disabled={!visible.length}>Export CSV</button>
         </div>
         {visible.length === 0 ? (
-          <p className={styles.muted}>No registrations yet.</p>
+          <p className={styles.muted}>No responses yet.</p>
         ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr><th>Name</th><th>Department</th><th>Signed up</th><th /></tr>
-            </thead>
-            <tbody>
-              {visible.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.name}</td>
-                  <td>{r.department}</td>
-                  <td className={styles.muted}>{new Date(r.created_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}</td>
-                  <td><button className={styles.linkBtn} onClick={() => removeReg(r)}>Remove</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr><th>Name</th><th>Department</th><th>Company</th><th>RSVP</th><th>Dietary</th><th>Responded</th><th /></tr>
+              </thead>
+              <tbody>
+                {visible.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.name}</td>
+                    <td>{r.department}</td>
+                    <td>{r.company || "–"}</td>
+                    <td><span className={r.attending ? styles.yes : styles.no}>{rsvpLabel(r)}</span></td>
+                    <td>{dietLabel(r)}</td>
+                    <td className={styles.muted}>{new Date(r.created_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}</td>
+                    <td><button className={styles.linkBtn} onClick={() => removeReg(r)}>Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+        <p className={styles.hint}>
+          Someone wants to change their response? Remove it here and ask them to fill in the form again.
+        </p>
       </section>
 
-      <section className={styles.panel}>
-        <h2 className={styles.h2}>Department suggestions</h2>
-        <p className={styles.muted} style={{ marginBottom: 12 }}>
-          Shown as suggestions while typing. People can also type a department that is not on this list.
-          Typing a known code in other capitals (e.g. "gehq") is saved as the code below, so counts stay tidy.
-        </p>
-        <ul className={styles.deptList}>
-          {depts.map((d) => (
-            <li key={d.id}>
-              <span><strong>{d.code}</strong>{d.name ? ` – ${d.name}` : ""}{!d.active && " (hidden)"}</span>
-              <span>
-                <button className={styles.linkBtn} onClick={() => toggleDept(d)}>{d.active ? "Hide" : "Show"}</button>
-                <button className={styles.linkBtn} onClick={() => removeDept(d)}>Remove</button>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <form className={styles.toolbar} onSubmit={addDept}>
-          <input className={styles.input} placeholder="Department (e.g. Warehouse)" value={newCode} onChange={(e) => setNewCode(e.target.value)} maxLength={80} />
-          <input className={styles.input} placeholder="Description (optional)" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <button className={styles.btn}>Add</button>
-        </form>
-        {msg && <p className={styles.error}>{msg}</p>}
-      </section>
+      <ListEditor
+        table="companies"
+        title="Company suggestions"
+        help={"Shown as suggestions while typing. People can also type a company that is not on this list. Typing a known company in other capitals is saved in the spelling below."}
+        placeholder="Company (e.g. GEB)"
+        maxLength={40}
+      />
+      <ListEditor
+        table="departments"
+        title="Department suggestions"
+        help={'Shown as suggestions while typing. People can also type a department that is not on this list. Typing a known department in other capitals is saved in the spelling below.'}
+        placeholder="Department (e.g. Warehouse)"
+        maxLength={80}
+      />
     </div>
+  );
+}
+
+function ListEditor({ table, title, help, placeholder, maxLength }) {
+  const [items, setItems] = useState([]);
+  const [code, setCode] = useState("");
+  const [desc, setDesc] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from(table).select("*").order("sort_order").order("code");
+    setItems(data || []);
+  }, [table]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function add(e) {
+    e.preventDefault();
+    setMsg("");
+    const value = code.trim();
+    if (!value) return;
+    const sort = Math.max(0, ...items.map((d) => d.sort_order)) + 1;
+    const { error } = await supabase.from(table).insert({ code: value, name: desc.trim() || null, sort_order: sort });
+    if (error) return setMsg(error.code === "23505" ? `${value} already exists.` : error.message);
+    setCode("");
+    setDesc("");
+    load();
+  }
+
+  async function toggle(d) {
+    await supabase.from(table).update({ active: !d.active }).eq("id", d.id);
+    load();
+  }
+
+  async function remove(d) {
+    if (!confirm(`Remove ${d.code}? Existing responses are kept.`)) return;
+    await supabase.from(table).delete().eq("id", d.id);
+    load();
+  }
+
+  return (
+    <section className={styles.panel}>
+      <h2 className={styles.h2}>{title}</h2>
+      <p className={styles.muted} style={{ marginBottom: 12 }}>{help}</p>
+      <ul className={styles.deptList}>
+        {items.map((d) => (
+          <li key={d.id}>
+            <span><strong>{d.code}</strong>{d.name ? ` – ${d.name}` : ""}{!d.active && " (hidden)"}</span>
+            <span>
+              <button className={styles.linkBtn} onClick={() => toggle(d)}>{d.active ? "Hide" : "Show"}</button>
+              <button className={styles.linkBtn} onClick={() => remove(d)}>Remove</button>
+            </span>
+          </li>
+        ))}
+        {items.length === 0 && <li className={styles.muted}>None yet.</li>}
+      </ul>
+      <form className={styles.toolbar} onSubmit={add}>
+        <input className={styles.input} placeholder={placeholder} value={code} onChange={(e) => setCode(e.target.value)} maxLength={maxLength} />
+        <input className={styles.input} placeholder="Description (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <button className={styles.btn}>Add</button>
+      </form>
+      {msg && <p className={styles.error}>{msg}</p>}
+    </section>
   );
 }

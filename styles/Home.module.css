@@ -196,3 +196,31 @@
 }
 
 .footer img { height: 26px; filter: brightness(0) invert(1); opacity: 0.8; }
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.choice {
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  border-radius: 12px;
+  padding: 12px 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.choice:hover { border-color: #b9c6d8; }
+
+.choiceActive,
+.choiceActive:hover {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--navy);
+}

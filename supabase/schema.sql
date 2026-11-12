@@ -19,7 +19,17 @@ alter table public.departments drop constraint if exists departments_code_check;
 alter table public.departments add constraint departments_code_check
   check (char_length(trim(code)) between 1 and 80);
 
-insert into public.departments (code, sort_order) values
+-- ── Bedrijven (suggesties in het invulveld) ───────────────────────────────────────────────
+create table if not exists public.companies (
+  id          uuid primary key default gen_random_uuid(),
+  code        text not null unique check (char_length(trim(code)) between 1 and 40),
+  name        text,
+  sort_order  int  not null default 0,
+  active      boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+insert into public.companies (code, sort_order) values
   ('GEM', 1),
   ('GE', 2),
   ('GEHQ', 3)
@@ -30,8 +40,15 @@ create table if not exists public.registrations (
   id          uuid primary key default gen_random_uuid(),
   name        text not null check (char_length(trim(name)) between 2 and 120),
   department  text,
+  company     text,
+  attending   boolean not null default true,
+  dietary     text,
   created_at  timestamptz not null default now()
 );
+
+alter table public.registrations add column if not exists company   text;
+alter table public.registrations add column if not exists attending boolean not null default true;
+alter table public.registrations add column if not exists dietary   text;
 
 -- Bijwerken vanaf de eerste versie (afdeling als keuzelijst → afdeling als vrije tekst).
 alter table public.registrations add column if not exists department text;
@@ -56,12 +73,30 @@ alter table public.registrations drop constraint if exists registrations_departm
 alter table public.registrations add constraint registrations_department_check
   check (char_length(trim(department)) between 1 and 80);
 
--- Dezelfde naam kan zich niet twee keer bij dezelfde afdeling inschrijven (hoofdletterongevoelig).
-create unique index if not exists registrations_unique_name_per_department
-  on public.registrations (lower(trim(name)), lower(trim(department)));
+-- Eerdere inschrijvingen hadden het bedrijf (GEM/GE/GEHQ) als afdeling ingevuld.
+update public.registrations
+   set company = upper(trim(department))
+ where company is null and upper(trim(department)) in ('GEM', 'GE', 'GEHQ');
+
+-- GEM/GE/GEHQ stonden in een eerdere versie bij de afdelingen; het zijn bedrijven.
+delete from public.departments where code in ('GEM', 'GE', 'GEHQ');
+
+alter table public.registrations drop constraint if exists registrations_company_check;
+alter table public.registrations add constraint registrations_company_check
+  check (company is null or char_length(trim(company)) between 1 and 40);
+
+-- Dieetwens: none (geen), halal of vegetarian (vegan/vegetarisch). Alleen bij aanwezigheid.
+alter table public.registrations drop constraint if exists registrations_dietary_check;
+alter table public.registrations add constraint registrations_dietary_check
+  check (dietary is null or dietary in ('none', 'halal', 'vegetarian'));
+
+-- Dezelfde naam kan niet twee keer reageren voor hetzelfde bedrijf en dezelfde afdeling (hoofdletterongevoelig).
+drop index if exists public.registrations_unique_name_per_department;
+create unique index if not exists registrations_unique_response
+  on public.registrations (lower(trim(name)), lower(coalesce(trim(company), '')), lower(trim(department)));
 
 -- ── Beheerders ─────────────────────────────────────────────────────────────
--- Wie hier staat (op e-mailadres) mag in /admin de lijst zien en afdelingen beheren.
+-- Wie hier staat (op e-mailadres) mag in /admin de lijst zien en bedrijven/afdelingen beheren.
 -- Het account zelf maak je aan in Supabase → Authentication → Users → Add user.
 create table if not exists public.admins (
   email text primary key
@@ -84,6 +119,7 @@ $$;
 
 -- ── Row Level Security ─────────────────────────────────────────────────────
 alter table public.departments   enable row level security;
+alter table public.companies     enable row level security;
 alter table public.registrations enable row level security;
 alter table public.admins        enable row level security;
 
@@ -103,11 +139,32 @@ drop policy if exists departments_admin_delete on public.departments;
 create policy departments_admin_delete on public.departments
   for delete to authenticated using (public.is_admin());
 
+-- Bedrijven: idem.
+drop policy if exists companies_read on public.companies;
+create policy companies_read on public.companies
+  for select to anon, authenticated
+  using (active or public.is_admin());
+
+drop policy if exists companies_admin_insert on public.companies;
+create policy companies_admin_insert on public.companies
+  for insert to authenticated with check (public.is_admin());
+drop policy if exists companies_admin_update on public.companies;
+create policy companies_admin_update on public.companies
+  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists companies_admin_delete on public.companies;
+create policy companies_admin_delete on public.companies
+  for delete to authenticated using (public.is_admin());
+
 -- Inschrijvingen: iedereen mag zich inschrijven, maar alleen beheerders mogen de lijst lezen of wissen.
 drop policy if exists registrations_public_insert on public.registrations;
 create policy registrations_public_insert on public.registrations
   for insert to anon, authenticated
-  with check (char_length(trim(name)) >= 2 and char_length(trim(department)) >= 1);
+  with check (
+    char_length(trim(name)) >= 2
+    and char_length(trim(department)) >= 1
+    and char_length(trim(coalesce(company, ''))) >= 1
+    and (not attending or dietary is not null)
+  );
 
 drop policy if exists registrations_admin_select on public.registrations;
 create policy registrations_admin_select on public.registrations
@@ -125,6 +182,8 @@ create policy admins_read on public.admins
 grant usage on schema public to anon, authenticated;
 grant select on public.departments to anon, authenticated;
 grant insert, update, delete on public.departments to authenticated;
+grant select on public.companies to anon, authenticated;
+grant insert, update, delete on public.companies to authenticated;
 grant insert on public.registrations to anon, authenticated;
 grant select, delete on public.registrations to authenticated;
 grant select on public.admins to authenticated;
