@@ -1,12 +1,14 @@
-# GIANT Christmas Party / 40th anniversary – inschrijving
+# GIANT 40th Anniversary & Christmas Celebration – inschrijving
 
 Een kleine webapp waarmee collega's zich via een QR-code op de flyer inschrijven met **naam + afdeling**.
+De afdeling is een vrij invulveld met suggesties uit de tabel `departments`.
 
 | Pagina | Wat |
 |---|---|
-| `/` | Inschrijfformulier (mobiel). Afdelingen komen uit de database |
-| `/admin` | Lijst met inschrijvingen, aantallen per afdeling, CSV-export, afdelingen toevoegen/verbergen |
+| `/` | Uitnodiging + inschrijfformulier (mobiel) |
+| `/admin` | Lijst met inschrijvingen, aantallen per afdeling, CSV-export, afdelingssuggesties beheren |
 | `/flyer` | A5-flyer met QR-code naar de app (printbaar als PDF) |
+| `/invitation` | Digitale uitnodiging (origineel ontwerp) met de echte QR-code |
 
 Stack: Next.js (Pages Router), Supabase, Vercel.
 
@@ -23,12 +25,19 @@ Stack: Next.js (Pages Router), Supabase, Vercel.
 
 ## Teksten aanpassen
 
-Datum, tijd, locatie, deadline en de titels staan in `lib/event.js`.
+Datum, tijd, locatie, deadline, programma en teksten staan in `lib/event.js`.
+De afbeeldingen komen uit het flyerontwerp: `public/invitation.webp` (volledig) en `public/hero.webp` (bovenkant).
 
-## Afdelingen toevoegen
+## Afdelingen
 
-Via `/admin` → *Departments* → code invullen → *Add*. "Hide from form" verbergt een afdeling
-op het formulier zonder bestaande inschrijvingen te verliezen.
+Medewerkers typen hun afdeling zelf in; bekende afdelingen verschijnen als suggestie.
+Typt iemand een bekende afdeling in andere hoofdletters (bv. "gehq"), dan wordt de vaste schrijfwijze opgeslagen.
+Suggesties beheer je via `/admin` → *Department suggestions*.
+
+## Database bijwerken
+
+`supabase/schema.sql` kan altijd opnieuw worden uitgevoerd: het werkt een bestaande database bij naar de nieuwste versie
+zonder inschrijvingen te verliezen.
 
 ## Flyer maken
 

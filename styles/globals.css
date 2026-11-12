@@ -1,16 +1,18 @@
 :root {
-  --navy: #071a33;
-  --navy-2: #0c2a52;
-  --blue: #005eb8;
-  --gold: #e6b84f;
-  --gold-soft: #f3d991;
-  --red: #c8322f;
-  --snow: #f6f8fb;
-  --text: #13213a;
+  --navy: #013c6c;
+  --navy-2: #012b4f;
+  --blue: #0a63c2;
+  --blue-soft: #e7f1fb;
+  --teal: #1aa6b7;
+  --green: #2f9e5b;
+  --snow: #f3f7fb;
+  --text: #0f2440;
   --muted: #5b6b82;
-  --line: #dfe5ee;
-  --serif: "Fraunces", Georgia, serif;
+  --line: #d8e2ec;
+  --red: #c8322f;
+  --heading: "Montserrat", system-ui, sans-serif;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Courier Prime", "Courier New", monospace;
 }
 
 * { box-sizing: border-box; }

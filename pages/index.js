@@ -4,44 +4,52 @@ import { supabase, supabaseConfigured } from "../lib/supabase";
 import { EVENT } from "../lib/event";
 import styles from "../styles/Home.module.css";
 
+const clean = (s) => s.trim().replace(/\s+/g, " ");
+
 export default function Home() {
-  const [departments, setDepartments] = useState([]);
-  const [loadingDepts, setLoadingDepts] = useState(true);
+  const [suggestions, setSuggestions] = useState([]);
   const [name, setName] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
+  const [department, setDepartment] = useState("");
   const [status, setStatus] = useState("idle"); // idle | sending | done | error
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState(null);
 
+  // Afdelingen uit de database dienen alleen als suggesties; vrije invoer mag ook.
   useEffect(() => {
     if (!supabaseConfigured) {
       setError("Sign-up is not available yet (database not configured).");
-      setLoadingDepts(false);
       return;
     }
     supabase
       .from("departments")
-      .select("id, code, name")
+      .select("code, name")
       .eq("active", true)
       .order("sort_order")
       .order("code")
-      .then(({ data, error }) => {
-        if (error) setError("Could not load departments. Please try again later.");
-        setDepartments(data || []);
-        setLoadingDepts(false);
-      });
+      .then(({ data }) => setSuggestions(data || []));
   }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const cleanName = name.trim().replace(/\s+/g, " ");
+    const cleanName = clean(name);
+    let cleanDept = clean(department);
     if (cleanName.length < 2) return setError("Please enter your full name.");
-    if (!departmentId) return setError("Please choose your department.");
+    if (!cleanDept) return setError("Please enter your department.");
+
+    // Komt de invoer overeen met een bekende afdeling, gebruik dan de vaste schrijfwijze
+    // (bv. "gehq" → "GEHQ"), zodat de tellingen per afdeling kloppen.
+    const match = suggestions.find(
+      (s) =>
+        s.code.toLowerCase() === cleanDept.toLowerCase() ||
+        (s.name && s.name.toLowerCase() === cleanDept.toLowerCase())
+    );
+    if (match) cleanDept = match.code;
 
     setStatus("sending");
     setError("");
     const { error } = await supabase
       .from("registrations")
-      .insert({ name: cleanName, department_id: departmentId });
+      .insert({ name: cleanName, department: cleanDept });
 
     if (error) {
       setStatus("error");
@@ -52,34 +60,39 @@ export default function Home() {
       );
       return;
     }
+    setSaved({ name: cleanName, department: cleanDept });
     setStatus("done");
   }
-
-  const dept = departments.find((d) => d.id === departmentId);
-  const details = [EVENT.date, EVENT.time, EVENT.location].filter(Boolean);
 
   return (
     <>
       <Head>
-        <title>{`${EVENT.company} ${EVENT.title} – Sign up`}</title>
+        <title>{`${EVENT.title} – RSVP`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#071a33" />
+        <meta name="theme-color" content="#013c6c" />
+        <meta name="description" content={`RSVP for the ${EVENT.title} on ${EVENT.date}.`} />
       </Head>
 
       <main className={styles.page}>
-        <section className={styles.hero}>
-          <img src="/giant-logo.svg" alt="GIANT" className={styles.logo} />
-          <div className={styles.badge}>
-            <span className={styles.badgeNum}>{EVENT.anniversary}</span>
-            <span className={styles.badgeLabel}>{EVENT.anniversaryLabel}</span>
-          </div>
-          <h1 className={styles.title}>{EVENT.title}</h1>
-          <p className={styles.tagline}>{EVENT.tagline}</p>
-          {details.length > 0 && (
-            <ul className={styles.details}>
-              {details.map((d) => <li key={d}>{d}</li>)}
-            </ul>
-          )}
+        <div className={styles.heroWrap}>
+          <img
+            src="/hero.webp"
+            alt={`GIANT 40th Anniversary Celebration – ${EVENT.date}`}
+            className={styles.hero}
+            width={1013}
+            height={1200}
+          />
+        </div>
+
+        <section className={styles.invite}>
+          <h1 className={styles.title}>You are invited!</h1>
+          <p className={styles.subtitle}>Our {EVENT.title}</p>
+
+          <ul className={styles.facts}>
+            <li><span className={styles.factLabel}>Date</span>{EVENT.date}</li>
+            <li><span className={styles.factLabel}>Time</span>{EVENT.time}</li>
+            <li><span className={styles.factLabel}>Location</span>{EVENT.venue}<br />{EVENT.address}</li>
+          </ul>
         </section>
 
         <section className={styles.card}>
@@ -88,14 +101,14 @@ export default function Home() {
               <div className={styles.check} aria-hidden>✓</div>
               <h2>You're on the list!</h2>
               <p>
-                Thanks, <strong>{name.trim()}</strong>
-                {dept ? ` (${dept.code})` : ""}. We look forward to celebrating with you.
+                Thanks, <strong>{saved.name}</strong> ({saved.department}).
+                <br />See you on {EVENT.date}!
               </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} noValidate>
-              <h2 className={styles.formTitle}>Sign up</h2>
-              {EVENT.deadline && <p className={styles.deadline}>{EVENT.deadline}</p>}
+              <h2 className={styles.formTitle}>RSVP</h2>
+              <p className={styles.deadline}>Please sign up before <strong>{EVENT.rsvpBefore}</strong></p>
 
               <label className={styles.label} htmlFor="name">Full name</label>
               <input
@@ -109,32 +122,47 @@ export default function Home() {
                 required
               />
 
-              <span className={styles.label}>Department</span>
-              <div className={styles.depts} role="radiogroup" aria-label="Department">
-                {loadingDepts && <span className={styles.muted}>Loading…</span>}
-                {departments.map((d) => (
-                  <button
-                    type="button"
-                    key={d.id}
-                    role="radio"
-                    aria-checked={departmentId === d.id}
-                    className={`${styles.dept} ${departmentId === d.id ? styles.deptActive : ""}`}
-                    onClick={() => setDepartmentId(d.id)}
-                  >
-                    <span className={styles.deptCode}>{d.code}</span>
-                    {d.name && <span className={styles.deptName}>{d.name}</span>}
-                  </button>
+              <label className={styles.label} htmlFor="department">Department</label>
+              <input
+                id="department"
+                className={styles.input}
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                list="department-suggestions"
+                autoComplete="off"
+                maxLength={80}
+                placeholder="e.g. GEHQ, Customer Service, Warehouse"
+                required
+              />
+              <datalist id="department-suggestions">
+                {suggestions.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name || ""}</option>
                 ))}
-              </div>
+              </datalist>
 
               {error && <p className={styles.error} role="alert">{error}</p>}
 
-              <button type="submit" className={styles.submit} disabled={status === "sending"}>
+              <button type="submit" className={styles.submit} disabled={status === "sending" || !supabaseConfigured}>
                 {status === "sending" ? "Signing up…" : "Count me in"}
               </button>
             </form>
           )}
         </section>
+
+        <section className={styles.about}>
+          {EVENT.intro.map((p) => <p key={p}>{p}</p>)}
+
+          <h3 className={styles.programTitle}>Time:</h3>
+          <ul className={styles.program}>
+            {EVENT.program.map(([t, what]) => (
+              <li key={t}><span>{t}</span>{what}</li>
+            ))}
+          </ul>
+        </section>
+
+        <footer className={styles.footer}>
+          <img src="/giant-logo.svg" alt="GIANT" />
+        </footer>
       </main>
     </>
   );

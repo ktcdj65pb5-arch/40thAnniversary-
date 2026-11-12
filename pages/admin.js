@@ -102,7 +102,7 @@ function Dashboard({ email }) {
     const [r, d] = await Promise.all([
       supabase
         .from("registrations")
-        .select("id, name, created_at, department_id, departments(code)")
+        .select("id, name, department, created_at")
         .order("created_at", { ascending: false }),
       supabase.from("departments").select("*").order("sort_order").order("code"),
     ]);
@@ -112,15 +112,23 @@ function Dashboard({ email }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const counts = useMemo(() => {
-    const c = {};
-    regs.forEach((r) => { c[r.department_id] = (c[r.department_id] || 0) + 1; });
-    return c;
+  // Tellingen per afdeling, hoofdletterongevoelig (vrije invoer).
+  const deptKey = (v) => (v || "").trim().toLowerCase();
+  const groups = useMemo(() => {
+    const m = new Map();
+    regs.forEach((r) => {
+      const k = deptKey(r.department);
+      const g = m.get(k) || { key: k, label: r.department, count: 0 };
+      g.count += 1;
+      m.set(k, g);
+    });
+    return [...m.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [regs]);
 
+  const q = search.trim().toLowerCase();
   const visible = regs.filter((r) =>
-    (filter === "all" || r.department_id === filter) &&
-    r.name.toLowerCase().includes(search.trim().toLowerCase())
+    (filter === "all" || deptKey(r.department) === filter) &&
+    (!q || r.name.toLowerCase().includes(q) || deptKey(r.department).includes(q))
   );
 
   async function removeReg(r) {
@@ -132,7 +140,7 @@ function Dashboard({ email }) {
   async function addDept(e) {
     e.preventDefault();
     setMsg("");
-    const code = newCode.trim().toUpperCase();
+    const code = newCode.trim();
     if (!code) return;
     const sort = Math.max(0, ...depts.map((d) => d.sort_order)) + 1;
     const { error } = await supabase
@@ -149,10 +157,16 @@ function Dashboard({ email }) {
     load();
   }
 
+  async function removeDept(d) {
+    if (!confirm(`Remove suggestion ${d.code}? Existing registrations are kept.`)) return;
+    await supabase.from("departments").delete().eq("id", d.id);
+    load();
+  }
+
   function exportCsv() {
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const rows = [["Name", "Department", "Signed up"]].concat(
-      visible.map((r) => [r.name, r.departments?.code, new Date(r.created_at).toLocaleString("nl-NL")])
+      visible.map((r) => [r.name, r.department, new Date(r.created_at).toLocaleString("nl-NL")])
     );
     const csv = "﻿" + rows.map((row) => row.map(esc).join(";")).join("\r\n");
     const a = document.createElement("a");
@@ -165,11 +179,12 @@ function Dashboard({ email }) {
     <div className={styles.wrap}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.h1}>{EVENT.title} – registrations</h1>
-          <p className={styles.muted}>Signed in as {email}</p>
+          <h1 className={styles.h1}>Registrations</h1>
+          <p className={styles.muted}>{EVENT.title} · {EVENT.date} · signed in as {email}</p>
         </div>
         <div className={styles.headerActions}>
-          <a className={styles.btnGhost} href="/flyer" target="_blank" rel="noreferrer">Flyer</a>
+          <a className={styles.btnGhost} href="/flyer" target="_blank" rel="noreferrer">A5 flyer</a>
+          <a className={styles.btnGhost} href="/invitation" target="_blank" rel="noreferrer">Digital flyer</a>
           <button className={styles.btnGhost} onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
       </header>
@@ -179,17 +194,17 @@ function Dashboard({ email }) {
           <span className={styles.statNum}>{regs.length}</span>
           <span className={styles.statLabel}>Total</span>
         </button>
-        {depts.map((d) => (
-          <button key={d.id} className={`${styles.stat} ${filter === d.id ? styles.statActive : ""}`} onClick={() => setFilter(d.id)}>
-            <span className={styles.statNum}>{counts[d.id] || 0}</span>
-            <span className={styles.statLabel}>{d.code}{!d.active && " (hidden)"}</span>
+        {groups.map((g) => (
+          <button key={g.key} className={`${styles.stat} ${filter === g.key ? styles.statActive : ""}`} onClick={() => setFilter(g.key)}>
+            <span className={styles.statNum}>{g.count}</span>
+            <span className={styles.statLabel}>{g.label}</span>
           </button>
         ))}
       </div>
 
       <section className={styles.panel}>
         <div className={styles.toolbar}>
-          <input className={styles.input} placeholder="Search name…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className={styles.input} placeholder="Search name or department…" value={search} onChange={(e) => setSearch(e.target.value)} />
           <button className={styles.btn} onClick={exportCsv} disabled={!visible.length}>Export CSV</button>
         </div>
         {visible.length === 0 ? (
@@ -203,7 +218,7 @@ function Dashboard({ email }) {
               {visible.map((r) => (
                 <tr key={r.id}>
                   <td>{r.name}</td>
-                  <td>{r.departments?.code}</td>
+                  <td>{r.department}</td>
                   <td className={styles.muted}>{new Date(r.created_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}</td>
                   <td><button className={styles.linkBtn} onClick={() => removeReg(r)}>Remove</button></td>
                 </tr>
@@ -214,19 +229,24 @@ function Dashboard({ email }) {
       </section>
 
       <section className={styles.panel}>
-        <h2 className={styles.h2}>Departments</h2>
+        <h2 className={styles.h2}>Department suggestions</h2>
+        <p className={styles.muted} style={{ marginBottom: 12 }}>
+          Shown as suggestions while typing. People can also type a department that is not on this list.
+          Typing a known code in other capitals (e.g. "gehq") is saved as the code below, so counts stay tidy.
+        </p>
         <ul className={styles.deptList}>
           {depts.map((d) => (
             <li key={d.id}>
-              <span><strong>{d.code}</strong>{d.name ? ` – ${d.name}` : ""}</span>
-              <button className={styles.linkBtn} onClick={() => toggleDept(d)}>
-                {d.active ? "Hide from form" : "Show on form"}
-              </button>
+              <span><strong>{d.code}</strong>{d.name ? ` – ${d.name}` : ""}{!d.active && " (hidden)"}</span>
+              <span>
+                <button className={styles.linkBtn} onClick={() => toggleDept(d)}>{d.active ? "Hide" : "Show"}</button>
+                <button className={styles.linkBtn} onClick={() => removeDept(d)}>Remove</button>
+              </span>
             </li>
           ))}
         </ul>
         <form className={styles.toolbar} onSubmit={addDept}>
-          <input className={styles.input} placeholder="Code (e.g. GEB)" value={newCode} onChange={(e) => setNewCode(e.target.value)} maxLength={20} />
+          <input className={styles.input} placeholder="Department (e.g. Warehouse)" value={newCode} onChange={(e) => setNewCode(e.target.value)} maxLength={80} />
           <input className={styles.input} placeholder="Description (optional)" value={newName} onChange={(e) => setNewName(e.target.value)} />
           <button className={styles.btn}>Add</button>
         </form>

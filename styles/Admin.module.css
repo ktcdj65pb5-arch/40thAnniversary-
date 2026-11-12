@@ -23,7 +23,7 @@
 }
 .headerActions { display: flex; gap: 8px; }
 
-.h1 { font-family: var(--serif); font-size: 26px; margin: 0; }
+.h1 { font-family: var(--heading); font-size: 26px; margin: 0; }
 .h2 { font-size: 17px; margin: 0 0 12px; }
 .muted { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
 .error { color: var(--red); font-size: 14px; margin: 8px 0 0; }
@@ -80,7 +80,7 @@
   flex-direction: column;
 }
 .statActive { border-color: var(--blue); background: #eaf3fc; }
-.statNum { font-family: var(--serif); font-size: 30px; font-weight: 800; line-height: 1.1; }
+.statNum { font-family: var(--heading); font-size: 30px; font-weight: 800; line-height: 1.1; }
 .statLabel { color: var(--muted); font-size: 13px; font-weight: 500; }
 
 .panel {
