@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Head from "next/head";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseConfigured } from "../lib/supabase";
 import { EVENT } from "../lib/event";
 import styles from "../styles/Admin.module.css";
 
@@ -10,6 +10,7 @@ export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    if (!supabaseConfigured) { setChecking(false); return; }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (!data.session) setChecking(false);
@@ -35,7 +36,14 @@ export default function Admin() {
         <meta name="robots" content="noindex" />
       </Head>
       <main className={styles.page}>
-        {checking ? (
+        {!supabaseConfigured ? (
+          <div className={styles.box}>
+            <h1 className={styles.h1}>Not configured</h1>
+            <p className={styles.muted}>
+              Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel and redeploy.
+            </p>
+          </div>
+        ) : checking ? (
           <p className={styles.muted}>Loading…</p>
         ) : !session ? (
           <Login />

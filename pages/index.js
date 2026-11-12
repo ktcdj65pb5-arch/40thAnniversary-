@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseConfigured } from "../lib/supabase";
 import { EVENT } from "../lib/event";
 import styles from "../styles/Home.module.css";
 
@@ -13,6 +13,11 @@ export default function Home() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!supabaseConfigured) {
+      setError("Sign-up is not available yet (database not configured).");
+      setLoadingDepts(false);
+      return;
+    }
     supabase
       .from("departments")
       .select("id, code, name")
