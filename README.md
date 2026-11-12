@@ -1,13 +1,13 @@
 # GIANT 40th Anniversary & Christmas Celebration – inschrijving
 
-Een kleine webapp waarmee collega's reageren op de uitnodiging (via de QR-code op de flyer) met:
-**naam – afdeling – bedrijf – RSVP ja/nee – dieetwens** (geen / halal / vegan-vegetarisch, alleen bij "ja").
+Een kleine webapp waarmee collega's zich aanmelden voor het feest (via de QR-code op de flyer) met:
+**naam – afdeling – bedrijf – dieetwens** (geen / halal / vegan-vegetarisch). Aanmelden = komen.
 Bedrijf en afdeling zijn vrije invulvelden met suggesties uit de tabellen `companies` en `departments`.
 
 | Pagina | Wat |
 |---|---|
 | `/` | Uitnodiging + inschrijfformulier (mobiel) |
-| `/admin` | Overzicht met aantallen (aanwezig, halal, vegan/vegetarisch), filters, CSV-export, suggesties beheren |
+| `/admin` | Overzicht met aantallen (aanmeldingen, halal, vegan/vegetarisch), filters, CSV-export, suggesties beheren |
 
 Stack: Next.js (Pages Router), Supabase, Vercel.
 
@@ -33,7 +33,7 @@ Medewerkers typen hun bedrijf en afdeling zelf in; bekende waarden verschijnen a
 Typt iemand een bekende waarde in andere hoofdletters (bv. "gehq"), dan wordt de vaste schrijfwijze opgeslagen.
 Suggesties beheer je via `/admin` → *Company suggestions* / *Department suggestions*.
 
-Wil iemand zijn antwoord wijzigen? Verwijder de reactie in `/admin` en laat het formulier opnieuw invullen.
+Wil iemand iets wijzigen of afmelden? Verwijder de aanmelding in `/admin` (en laat zo nodig opnieuw aanmelden).
 
 ## Database bijwerken
 

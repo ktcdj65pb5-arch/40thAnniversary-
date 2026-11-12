@@ -90,34 +90,29 @@ function Login() {
 }
 
 const DIETARY_LABEL = { none: "No", halal: "Halal", vegetarian: "Vegan / Vegetarian" };
-const rsvpLabel = (r) => (r.attending ? "Yes" : "No");
-const dietLabel = (r) => (r.attending ? DIETARY_LABEL[r.dietary] || "–" : "–");
+const dietLabel = (r) => DIETARY_LABEL[r.dietary] || "–";
 
 function Dashboard({ email }) {
   const [regs, setRegs] = useState([]);
   const [search, setSearch] = useState("");
   const [fCompany, setFCompany] = useState("all");
-  const [fRsvp, setFRsvp] = useState("all");
   const [fDiet, setFDiet] = useState("all");
 
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("registrations")
-      .select("id, name, company, department, attending, dietary, created_at")
+      .select("id, name, company, department, dietary, created_at")
       .order("created_at", { ascending: false });
     setRegs(data || []);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const yes = regs.filter((r) => r.attending);
   const stats = [
-    { label: "Responses", value: regs.length },
-    { label: "Attending", value: yes.length },
-    { label: "Not attending", value: regs.length - yes.length },
-    { label: "Halal", value: yes.filter((r) => r.dietary === "halal").length },
-    { label: "Vegan / Vegetarian", value: yes.filter((r) => r.dietary === "vegetarian").length },
-    { label: "No dietary req.", value: yes.filter((r) => r.dietary === "none").length },
+    { label: "Sign-ups", value: regs.length },
+    { label: "Halal", value: regs.filter((r) => r.dietary === "halal").length },
+    { label: "Vegan / Vegetarian", value: regs.filter((r) => r.dietary === "vegetarian").length },
+    { label: "No dietary req.", value: regs.filter((r) => r.dietary === "none").length },
   ];
 
   // Bedrijf is vrije tekst: groepeer hoofdletterongevoelig.
@@ -129,35 +124,34 @@ function Dashboard({ email }) {
   }, [regs]);
   const perCompany = companyGroups.map((c) => ({
     ...c,
-    attending: yes.filter((r) => cKey(r) === c.key).length,
+    count: regs.filter((r) => cKey(r) === c.key).length,
   }));
 
   const q = search.trim().toLowerCase();
   const visible = regs.filter((r) =>
     (fCompany === "all" || cKey(r) === fCompany) &&
-    (fRsvp === "all" || (fRsvp === "yes") === r.attending) &&
-    (fDiet === "all" || (r.attending && r.dietary === fDiet)) &&
+    (fDiet === "all" || r.dietary === fDiet) &&
     (!q || [r.name, r.department, r.company].some((v) => (v || "").toLowerCase().includes(q)))
   );
 
   async function removeReg(r) {
-    if (!confirm(`Remove the response of ${r.name}?`)) return;
+    if (!confirm(`Remove the sign-up of ${r.name}?`)) return;
     await supabase.from("registrations").delete().eq("id", r.id);
     load();
   }
 
   function exportCsv() {
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const rows = [["Name", "Department", "Company", "RSVP", "Dietary", "Responded"]].concat(
+    const rows = [["Name", "Department", "Company", "Dietary", "Signed up"]].concat(
       visible.map((r) => [
-        r.name, r.department, r.company, rsvpLabel(r), dietLabel(r),
+        r.name, r.department, r.company, dietLabel(r),
         new Date(r.created_at).toLocaleString("nl-NL"),
       ])
     );
     const csv = "﻿" + rows.map((row) => row.map(esc).join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = "rsvp-40th-anniversary.csv";
+    a.download = "signups-40th-anniversary.csv";
     a.click();
   }
 
@@ -165,7 +159,7 @@ function Dashboard({ email }) {
     <div className={styles.wrap}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.h1}>RSVP overview</h1>
+          <h1 className={styles.h1}>Sign-ups</h1>
           <p className={styles.muted}>{EVENT.title} · {EVENT.date} · signed in as {email}</p>
         </div>
         <div className={styles.headerActions}>
@@ -185,9 +179,9 @@ function Dashboard({ email }) {
 
       {perCompany.length > 0 && (
         <p className={styles.perCompany}>
-          Attending per company:{" "}
+          Per company:{" "}
           {perCompany.map((c) => (
-            <span key={c.key} className={styles.pill}>{c.label} <b>{c.attending}</b></span>
+            <span key={c.key} className={styles.pill}>{c.label} <b>{c.count}</b></span>
           ))}
         </p>
       )}
@@ -199,11 +193,6 @@ function Dashboard({ email }) {
             <option value="all">All companies</option>
             {companyGroups.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
-          <select className={styles.select} value={fRsvp} onChange={(e) => setFRsvp(e.target.value)}>
-            <option value="all">RSVP: all</option>
-            <option value="yes">RSVP: yes</option>
-            <option value="no">RSVP: no</option>
-          </select>
           <select className={styles.select} value={fDiet} onChange={(e) => setFDiet(e.target.value)}>
             <option value="all">Dietary: all</option>
             <option value="none">Dietary: no</option>
@@ -213,12 +202,12 @@ function Dashboard({ email }) {
           <button className={styles.btn} onClick={exportCsv} disabled={!visible.length}>Export CSV</button>
         </div>
         {visible.length === 0 ? (
-          <p className={styles.muted}>No responses yet.</p>
+          <p className={styles.muted}>No sign-ups yet.</p>
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
-                <tr><th>Name</th><th>Department</th><th>Company</th><th>RSVP</th><th>Dietary</th><th>Responded</th><th /></tr>
+                <tr><th>Name</th><th>Department</th><th>Company</th><th>Dietary</th><th>Signed up</th><th /></tr>
               </thead>
               <tbody>
                 {visible.map((r) => (
@@ -226,7 +215,6 @@ function Dashboard({ email }) {
                     <td>{r.name}</td>
                     <td>{r.department}</td>
                     <td>{r.company || "–"}</td>
-                    <td><span className={r.attending ? styles.yes : styles.no}>{rsvpLabel(r)}</span></td>
                     <td>{dietLabel(r)}</td>
                     <td className={styles.muted}>{new Date(r.created_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}</td>
                     <td><button className={styles.linkBtn} onClick={() => removeReg(r)}>Remove</button></td>
@@ -237,7 +225,7 @@ function Dashboard({ email }) {
           </div>
         )}
         <p className={styles.hint}>
-          Someone wants to change their response? Remove it here and ask them to fill in the form again.
+          Someone wants to change their sign-up or cancel? Remove it here (and ask them to sign up again if needed).
         </p>
       </section>
 
@@ -291,7 +279,7 @@ function ListEditor({ table, title, help, placeholder, maxLength }) {
   }
 
   async function remove(d) {
-    if (!confirm(`Remove ${d.code}? Existing responses are kept.`)) return;
+    if (!confirm(`Remove ${d.code}? Existing sign-ups are kept.`)) return;
     await supabase.from(table).delete().eq("id", d.id);
     load();
   }

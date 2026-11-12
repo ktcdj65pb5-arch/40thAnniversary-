@@ -45,7 +45,6 @@ export default function Home() {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [department, setDepartment] = useState("");
-  const [attending, setAttending] = useState(null); // true | false
   const [dietary, setDietary] = useState("");
   const [status, setStatus] = useState("idle"); // idle | sending | done | error
   const [error, setError] = useState("");
@@ -81,15 +80,13 @@ export default function Home() {
     if (cleanName.length < 2) return setError("Please enter your full name.");
     if (!cleanCompany) return setError("Please enter your company.");
     if (!cleanDept) return setError("Please enter your department.");
-    if (attending === null) return setError("Please let us know if you will attend.");
-    if (attending && !dietary) return setError("Please choose your dietary preference.");
+    if (!dietary) return setError("Please choose your dietary requirements.");
 
     const row = {
       name: cleanName,
       company: cleanCompany,
       department: cleanDept,
-      attending,
-      dietary: attending ? dietary : null,
+      dietary,
     };
 
     setStatus("sending");
@@ -100,7 +97,7 @@ export default function Home() {
       setStatus("error");
       setError(
         error.code === "23505"
-          ? "We already have a response from you. Want to change it? Please contact the organisers."
+          ? "You're already signed up. Want to change something? Please contact the organisers."
           : "Something went wrong. Please try again."
       );
       return;
@@ -112,10 +109,10 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>{`${EVENT.title} – RSVP`}</title>
+        <title>{`${EVENT.title} – Sign up`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#013c6c" />
-        <meta name="description" content={`RSVP for the ${EVENT.title} on ${EVENT.date}.`} />
+        <meta name="description" content={`Sign up for the ${EVENT.title} on ${EVENT.date}.`} />
       </Head>
 
       <main className={styles.page}>
@@ -144,28 +141,16 @@ export default function Home() {
           {status === "done" ? (
             <div className={styles.success}>
               <div className={styles.check} aria-hidden>✓</div>
-              {saved.attending ? (
-                <>
-                  <h2>You're on the list!</h2>
-                  <p>
-                    Thanks, <strong>{saved.name}</strong>.
-                    <br />See you on {EVENT.date}!
-                  </p>
-                </>
-              ) : (
-                <>
-                  <h2>Thanks for letting us know</h2>
-                  <p>
-                    Sorry you can't make it, <strong>{saved.name}</strong>.
-                    <br />We'll miss you!
-                  </p>
-                </>
-              )}
+              <h2>You're on the list!</h2>
+              <p>
+                Thanks, <strong>{saved.name}</strong>.
+                <br />See you on {EVENT.date}!
+              </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} noValidate>
-              <h2 className={styles.formTitle}>RSVP</h2>
-              <p className={styles.deadline}>Please respond before <strong>{EVENT.rsvpBefore}</strong></p>
+              <h2 className={styles.formTitle}>Sign up</h2>
+              <p className={styles.deadline}>Please sign up before <strong>{EVENT.rsvpBefore}</strong></p>
 
               <label className={styles.label} htmlFor="name">Full name</label>
               <input
@@ -215,28 +200,13 @@ export default function Home() {
                 ))}
               </datalist>
 
-              <span className={styles.label}>Will you attend?</span>
-              <Choice
-                label="Will you attend?"
-                value={attending === null ? "" : attending ? "yes" : "no"}
-                onChange={(v) => setAttending(v === "yes")}
-                options={[
-                  { value: "yes", label: "Yes, I'll be there" },
-                  { value: "no", label: "No, I can't make it" },
-                ]}
-              />
-
-              {attending && (
-                <>
-                  <span className={styles.label}>Dietary requirements</span>
-                  <Choice label="Dietary requirements" value={dietary} onChange={setDietary} options={DIETARY} />
-                </>
-              )}
+              <span className={styles.label}>Dietary requirements</span>
+              <Choice label="Dietary requirements" value={dietary} onChange={setDietary} options={DIETARY} />
 
               {error && <p className={styles.error} role="alert">{error}</p>}
 
               <button type="submit" className={styles.submit} disabled={status === "sending" || !supabaseConfigured}>
-                {status === "sending" ? "Sending…" : "Send RSVP"}
+                {status === "sending" ? "Signing up…" : "Sign me up"}
               </button>
             </form>
           )}
