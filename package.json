@@ -1,0 +1,18 @@
+{
+  "name": "giant-feest-inschrijving",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "flyer": "node scripts/make-flyer.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "next": "^16.0.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

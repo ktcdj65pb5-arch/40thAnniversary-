@@ -1,0 +1,27 @@
+:root {
+  --navy: #071a33;
+  --navy-2: #0c2a52;
+  --blue: #005eb8;
+  --gold: #e6b84f;
+  --gold-soft: #f3d991;
+  --red: #c8322f;
+  --snow: #f6f8fb;
+  --text: #13213a;
+  --muted: #5b6b82;
+  --line: #dfe5ee;
+  --serif: "Fraunces", Georgia, serif;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--snow);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; }
