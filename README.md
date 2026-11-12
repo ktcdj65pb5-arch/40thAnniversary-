@@ -48,6 +48,13 @@ npm install
 npm run dev
 ```
 
+## Supabase actief houden
+
+Het gratis Supabase-plan pauzeert een project na ongeveer een week zonder activiteit. Daarom roept Vercel
+elke dag om 06:17 UTC `/api/keepalive` aan (zie `vercel.json`), dat één kleine leesquery doet.
+Controleren: Vercel → project → **Settings → Cron Jobs**. Optioneel: zet `CRON_SECRET` als environment
+variable in Vercel; dan mag alleen Vercel Cron het adres aanroepen.
+
 ## Beveiliging
 
 - Iedereen mag zich inschrijven (insert), maar **alleen beheerders** (tabel `admins`) kunnen de lijst lezen of wissen (RLS).
